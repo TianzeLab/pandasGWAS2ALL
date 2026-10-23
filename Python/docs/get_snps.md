@@ -1,0 +1,1 @@
+::: pandasgwas.get_snps

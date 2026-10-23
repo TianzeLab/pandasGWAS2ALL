@@ -1,0 +1,40 @@
+Package: pandasGWASr
+Type: Package
+Title: Programmatic Access to GWAS Catalog REST API V2
+Version: 1.0.0
+Authors@R: c(
+    person(
+      "Tianze", "Cao",
+      email = "hnrcao@qq.com",
+      role = c("aut", "cre")
+    )
+  )
+Description: An R client providing programmatic access to the
+    NHGRI-EBI GWAS Catalog RESTful API version 2. The package offers a
+    unified interface for querying GWAS Catalog data, including
+    associations, studies, traits, variants, publications, genes,
+    ancestries, loci, genomic contexts and summary statistics, with
+    built-in response caching, automatic pagination and Fat/Thin
+    response modes. Results are returned as S4 data objects supporting
+    position and identifier indexing as well as set operations through
+    the +, -, &, |, ^ and == operators.
+URL: https://github.com/TianzeLab/pandasGWASr
+BugReports: https://github.com/TianzeLab/pandasGWASr/issues
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.0.0)
+Imports:
+    httr2,
+    jsonlite,
+    progress,
+    utils,
+    cachem,
+    rlang,
+    methods
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+RoxygenNote: 7.3.3

@@ -1,0 +1,706 @@
+---
+title: "Answering typical GWAS questions with pandasGWASr"
+author: "Tianze Cao"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Answering typical GWAS questions with pandasGWASr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+This vignette shows how to answer typical GWAS questions with **pandasGWASr**. All REST API access — URL construction, pagination, response cleaning and caching — is handled by the package: `get_associations()`, `get_studies()` and `get_snps()` return S4 objects that expose the data as hierarchical data.frames joined by `association_id` (for associations) or `accession_id` (for studies).
+
+> **Note:** the code chunks in this vignette are not evaluated at build time because they query the live GWAS Catalog API and may take several minutes in total. Run the chunks interactively to reproduce the results.
+
+## Libraries
+
+```{r setup}
+# install.packages("remotes")
+# remotes::install_github("TianzeLab/pandasGWASr")
+
+library(pandasGWASr)
+
+print("Setup complete. pandasGWASr is ready to use.")
+```
+
+## Sample Questions
+
+Below we have some sample questions and how to answer them using pandasGWASr.
+
+Note that in all questions below, we use the EFO traits for the diseases and traits. For more information, please visit <https://www.ebi.ac.uk/efo/>
+
+### Question 1: What variants are associated with a specific disease, e.g. type 2 diabetes?
+
+To find variants associated with "type 2 diabetes mellitus," the code queries the associations endpoint through `get_associations()`, using the disease name as a filter. All result pages are fetched automatically. The main `associations` table is then merged with the `snp_effect_alleles` and `mapped_genes` tables on `association_id`, the variant's **rsID** is separated from its **risk allele**, and a clear table with the most important information (variant ID, p-value, and publication) is displayed for the first findings.
+
+```{r q1}
+# The disease we are interested in
+disease_of_interest <- "type 2 diabetes mellitus"
+
+# Get all associations for the trait; pagination and caching are handled automatically
+assocs <- get_associations(efo_trait = disease_of_interest)
+
+cat(sprintf("Found %d associations for '%s'.\n", length(assocs), disease_of_interest))
+cat("Displaying the first 10 results:\n")
+
+# Combine the main table with the variant and gene tables on association_id
+display_df <- merge(
+  merge(assocs@associations, assocs@snp_effect_alleles, by = "association_id"),
+  assocs@mapped_genes, by = "association_id"
+)
+
+# Split 'snp_effect_allele' (e.g. 'rs123-A') into the variant ID and the allele base
+allele_parts <- strsplit(display_df$snp_effect_allele, "-", fixed = TRUE)
+display_df$variant_rsID <- vapply(allele_parts, function(p) p[1], character(1))
+display_df$risk_allele_base <- vapply(
+  allele_parts,
+  function(p) if (length(p) > 1) paste(p[-1], collapse = "-") else NA_character_,
+  character(1)
+)
+display_df$mapped_genes[is.na(display_df$mapped_genes)] <- ""
+
+# Select and display the most relevant columns for clarity
+print(
+  head(display_df[
+    , c("variant_rsID", "risk_allele_base", "p_value",
+        "risk_frequency", "pubmed_id", "mapped_genes")
+  ], 10)
+)
+```
+
+### Question 2: What studies with samples including cohort “UKB” are available for “type 2 diabetes”?
+
+This script finds studies on "type 2 diabetes" specifically within the "UK Biobank" (UKB) cohort by using both the `disease_trait` and `cohort` filters of `get_studies()`. The cohort information is stored in a separate `cohorts` table, which is merged with the main `studies` table on `accession_id` for display.
+
+```{r q2}
+# The trait and cohort we are interested in
+disease_of_interest <- "type 2 diabetes"
+cohort_of_interest <- "UKB"  # UK Biobank
+
+studies <- get_studies(disease_trait = disease_of_interest, cohort = cohort_of_interest)
+
+cat(sprintf(
+  "Found %d studies for '%s' in the '%s' cohort.\n",
+  length(studies), disease_of_interest, cohort_of_interest
+))
+cat("Displaying results:\n")
+
+# Merge the main table with the cohort table on accession_id
+studies_df <- merge(studies@studies, studies@cohorts, by = "accession_id")
+studies_df$cohort <- vapply(
+  studies_df$cohort,
+  function(cohorts) paste(cohorts, collapse = ", "),
+  character(1)
+)
+
+# Display the data.frame with selected, useful columns
+print(studies_df[
+  , c("accession_id", "pubmed_id", "disease_trait",
+      "initial_sample_size", "cohort")
+])
+```
+
+### Question 3: What are the most significant associations for a specific SNP? eg: significant associations for rs1050316
+
+This script finds the most statistically significant trait associations for a specific SNP, `rs1050316`, using `get_associations(rs_id = ...)`. The results are sorted locally by **p-value** in ascending order, so the top rows are the most significant ones. The trait names are taken from the `efo_traits` table and joined on `association_id` for a clean display.
+
+```{r q3}
+# The SNP we are interested in
+snp_of_interest <- "rs1050316"
+
+assocs <- get_associations(rs_id = snp_of_interest)
+
+cat(sprintf("Found %d associations for SNP '%s'.\n", length(assocs), snp_of_interest))
+cat("Displaying the 10 most significant results:\n")
+
+# Sort by p-value (most significant first)
+assocs_df <- assocs@associations
+assocs_df$p_value <- as.numeric(assocs_df$p_value)
+
+# Join the trait names and keep the top 10 associations
+assocs_df <- assocs_df[order(assocs_df$p_value), ]
+top_df <- merge(assocs_df, assocs@efo_traits, by = "association_id")
+top_df <- top_df[!duplicated(top_df$association_id), ]
+top_df <- head(top_df, 10)
+
+print(top_df[
+  , c("p_value", "efo_trait", "risk_frequency", "pubmed_id", "first_author")
+])
+```
+
+### Question 4: Which genes are associated with type 2 diabetes?
+
+This script compiles a comprehensive list of all unique genes associated with "type 2 diabetes mellitus". All associations are fetched with a single `get_associations(efo_trait = ...)` call — no manual pagination is needed. The gene names are extracted from the `mapped_genes` table and de-duplicated with `unique()`.
+
+```{r q4}
+# The disease we want to find associated genes for
+disease_of_interest <- "type 2 diabetes mellitus"
+cat(sprintf("Searching for genes associated with '%s'...\n", disease_of_interest))
+
+# Fetch all associations for the trait in one call
+assocs <- get_associations(efo_trait = disease_of_interest)
+
+# Split comma-separated gene lists and collect unique gene names
+all_genes <- character(0)
+for (genes in assocs@mapped_genes$mapped_genes) {
+  # A single value can have multiple comma-separated genes
+  if (is.character(genes) && !is.na(genes)) {
+    for (gene in strsplit(genes, ",", fixed = TRUE)[[1]]) {
+      if (nzchar(trimws(gene))) {
+        all_genes <- c(all_genes, trimws(gene))
+      }
+    }
+  }
+}
+all_genes <- unique(all_genes)
+
+# Display the final results
+cat("\n--- Search Complete ---\n")
+if (length(all_genes) > 0) {
+  sorted_genes <- sort(all_genes)
+  cat(sprintf(
+    "Found a total of %d unique genes associated with '%s'.\n",
+    length(sorted_genes), disease_of_interest
+  ))
+  cat("Example genes:", paste(head(sorted_genes, 100), collapse = ", "), "\n")
+} else {
+  cat(sprintf("Could not find any genes associated with '%s'.\n", disease_of_interest))
+}
+```
+
+### Question 5: What are the top significant SNPs for type 2 diabetes in the European population?
+
+This code finds the most significant SNPs for a trait within a specific population. First, it retrieves all associations for "type 2 diabetes mellitus" and all matching studies. The studies' `discovery_ancestries` table is used to collect the publications (PubMed IDs) that involve European-ancestry studies. Associations are then filtered by those PubMed IDs, sorted by p-value, and the top matches are displayed.
+
+```{r q5}
+# --- Configuration ---
+trait_of_interest <- "type 2 diabetes mellitus"
+population_of_interest <- "European"
+results_to_find <- 10
+
+cat(sprintf(
+  "Searching for top %d SNPs for '%s' in '%s' ancestry studies...\n",
+  results_to_find, trait_of_interest, population_of_interest
+))
+
+# --- Step 1: Fetch all associations and studies for the trait ---
+assocs <- get_associations(efo_trait = trait_of_interest)
+studies <- get_studies(efo_trait = trait_of_interest)
+cat(sprintf("--- Finished fetching. Found %d total associations. ---\n\n", length(assocs)))
+
+# --- Step 2: Collect publications with European-ancestry studies ---
+studies_df <- merge(studies@studies, studies@discovery_ancestries, by = "accession_id")
+is_european <- grepl(population_of_interest, studies_df$discovery_ancestry,
+                     ignore.case = TRUE)
+european_pmids <- unique(studies_df$pubmed_id[is_european])
+european_pmids <- european_pmids[!is.na(european_pmids)]
+
+# --- Step 3: Filter and sort the associations ---
+assocs_df <- assocs@associations
+assocs_df$p_value <- as.numeric(assocs_df$p_value)
+assocs_df <- assocs_df[!is.na(assocs_df$pubmed_id) & assocs_df$pubmed_id %in% european_pmids, ]
+assocs_df <- assocs_df[order(assocs_df$p_value), ]
+top <- merge(assocs_df, assocs@snp_effect_alleles, by = "association_id")
+top <- head(top[!duplicated(top$association_id), ], results_to_find)
+
+# --- Step 4: Display the final results ---
+cat("--- Search Complete ---\n")
+if (nrow(top) > 0) {
+  allele_parts <- strsplit(top$snp_effect_allele, "-", fixed = TRUE)
+  top$variant_rsID <- vapply(allele_parts, function(p) p[1], character(1))
+  top$risk_allele_base <- vapply(
+    allele_parts,
+    function(p) if (length(p) > 1) paste(p[-1], collapse = "-") else NA_character_,
+    character(1)
+  )
+  cat(sprintf("Found the top %d matching associations.\n", nrow(top)))
+  print(top[, c("p_value", "variant_rsID", "risk_allele_base",
+                "pubmed_id", "first_author")])
+} else {
+  cat("Could not find any matching associations.\n")
+}
+```
+
+### Question 6: Which variants are common between "type 2 diabetes" and "obesity"?
+
+This script identifies genetic variants common to both "type 2 diabetes" and "obesity" by comparing two distinct sets of data. The variants of each trait are collected from the `snp_effect_alleles` table of the corresponding `Association` object. Finally, the two variant vectors are compared with the `%in%` operator to find and display the variants present in both groups. (Equivalently, the two `Association` objects can be compared directly with the package's `&` operator or `intersect()` function.)
+
+```{r q6}
+# Define the two traits of interest
+trait_1 <- "type 2 diabetes mellitus"
+trait_2 <- "obesity"
+
+# --- Fetch and collect variants for trait_1 ---
+cat(sprintf("--- Starting search for '%s' ---\n", trait_1))
+assocs_1 <- get_associations(efo_trait = trait_1)
+alleles_1 <- assocs_1@snp_effect_alleles$snp_effect_allele
+variants_for_trait_1 <- unique(sub("-.*$", "", alleles_1))
+variants_for_trait_1 <- variants_for_trait_1[startsWith(variants_for_trait_1, "rs")]
+variants_for_trait_1 <- variants_for_trait_1[!is.na(variants_for_trait_1)]
+cat(sprintf(
+  "--- Finished fetching for '%s'. Found %d total unique variants. ---\n\n",
+  trait_1, length(variants_for_trait_1)
+))
+
+# --- Fetch and collect variants for trait_2 ---
+cat(sprintf("--- Starting search for '%s' ---\n", trait_2))
+assocs_2 <- get_associations(efo_trait = trait_2)
+alleles_2 <- assocs_2@snp_effect_alleles$snp_effect_allele
+variants_for_trait_2 <- unique(sub("-.*$", "", alleles_2))
+variants_for_trait_2 <- variants_for_trait_2[startsWith(variants_for_trait_2, "rs")]
+variants_for_trait_2 <- variants_for_trait_2[!is.na(variants_for_trait_2)]
+cat(sprintf(
+  "--- Finished fetching for '%s'. Found %d total unique variants. ---\n\n",
+  trait_2, length(variants_for_trait_2)
+))
+
+# Find the variants present in both groups
+common_variants <- variants_for_trait_1[variants_for_trait_1 %in% variants_for_trait_2]
+
+# --- Display the final results ---
+cat("\n--- Search Complete ---\n")
+if (length(common_variants) > 0) {
+  cat(sprintf(
+    "Found %d variants common to both '%s' and '%s':\n",
+    length(common_variants), trait_1, trait_2
+  ))
+  print(sort(common_variants))
+} else {
+  cat(sprintf("No common variants found between '%s' and '%s'.\n", trait_1, trait_2))
+}
+```
+
+### Question 7: What are the most commonly mapped genes for a specific disease? e.g. type 2 diabetes
+
+This script identifies the most frequently mapped genes for "type 2 diabetes mellitus" by fetching all associations for the disease with one `get_associations(efo_trait = ...)` call. Every gene name is extracted from the `mapped_genes` table (handling cases where multiple genes are listed together) and gathered into a single vector. R's `table()` then counts the occurrences of each unique gene, and a ranked list of the top 10 most common ones is displayed.
+
+```{r q7}
+trait_of_interest <- "type 2 diabetes mellitus"
+results_to_find <- 10
+
+cat(sprintf(
+  "Searching for the most reported genes in associations for '%s'...\n",
+  trait_of_interest
+))
+
+# --- Step 1: Fetch all associations for the trait ---
+assocs <- get_associations(efo_trait = trait_of_interest)
+cat(sprintf("--- Finished fetching. Found %d total associations. ---\n\n", length(assocs)))
+
+# --- Step 2: Extract and count all gene mentions ---
+all_gene_mentions <- character(0)
+for (genes in assocs@mapped_genes$mapped_genes) {
+  # A single value can have multiple comma-separated genes
+  if (is.character(genes) && !is.na(genes)) {
+    for (gene in strsplit(genes, ",", fixed = TRUE)[[1]]) {
+      if (nzchar(trimws(gene))) {
+        all_gene_mentions <- c(all_gene_mentions, trimws(gene))
+      }
+    }
+  }
+}
+
+# --- Step 3: Display the top N most common genes ---
+cat("\n--- Analysis Complete ---\n")
+if (length(all_gene_mentions) > 0) {
+  gene_counts <- sort(table(all_gene_mentions), decreasing = TRUE)
+
+  cat(sprintf("Found %d unique genes in total.\n", length(gene_counts)))
+  cat(sprintf(
+    "The top %d most frequently reported genes for '%s' are:\n",
+    results_to_find, trait_of_interest
+  ))
+  print(head(gene_counts, results_to_find))
+} else {
+  cat(sprintf("Could not find any gene associations for '%s'.\n", trait_of_interest))
+}
+```
+
+### Question 8: What traits are associated with a particular SNP?
+
+This script comprehensively finds all unique traits associated with an SNP (`rs1050316`). All associations for the SNP are fetched in one call with `get_associations(rs_id = ...)`, and the trait names are read from the `efo_traits` table, whose rows are already one-per-trait. `unique()` is used to remove any duplicates before displaying the final, sorted list of traits.
+
+```{r q8}
+# Configuration
+snp_of_interest <- "rs1050316"
+
+cat(sprintf("Searching for all traits associated with SNP '%s'...\n", snp_of_interest))
+
+# Fetch all associations for the SNP and collect the unique trait names
+assocs <- get_associations(rs_id = snp_of_interest)
+associated_traits <- unique(assocs@efo_traits$efo_trait)
+associated_traits <- associated_traits[!is.na(associated_traits)]
+
+# --- Display the final results ---
+cat("\n--- Search Complete ---\n")
+if (length(associated_traits) > 0) {
+  cat(sprintf(
+    "Found a total of %d unique traits associated with '%s':\n",
+    length(associated_traits), snp_of_interest
+  ))
+  for (trait in sort(associated_traits)) {
+    cat(sprintf("- %s\n", trait))
+  }
+} else {
+  cat(sprintf("Could not find any traits associated with '%s'.\n", snp_of_interest))
+}
+```
+
+### Question 9: Which studies on a trait have full summary statistics?
+
+This script finds all studies for "type 2 diabetes" that have complete summary statistics by using the `full_pvalue_set = TRUE` filter of `get_studies()`. The server returns only matching studies, and all pages are collected automatically into a single `Study` object, which is displayed as a table showing each study's **accession ID** and the **link** to its summary statistics file.
+
+```{r q9}
+trait_of_interest <- "type 2 diabetes mellitus"
+
+cat(sprintf(
+  "Searching for studies on '%s' with full summary statistics...\n",
+  trait_of_interest
+))
+
+# Filter for studies with full summary statistics
+studies <- get_studies(efo_trait = trait_of_interest, full_pvalue_set = TRUE)
+
+# --- Display the final results ---
+cat("\n--- Search Complete ---\n")
+if (length(studies) > 0) {
+  cat(sprintf(
+    "Found a total of %d studies for '%s' with full summary statistics.\n",
+    length(studies), trait_of_interest
+  ))
+  print(studies@studies[
+    , c("accession_id", "pubmed_id", "initial_sample_size",
+        "full_summary_stats")  # This column contains the link to the stats
+  ])
+} else {
+  cat(sprintf(
+    "Could not find any studies for '%s' with full summary statistics.\n",
+    trait_of_interest
+  ))
+}
+```
+
+### Question 10: What variants are in a gene `HBS1L` and what are their associated traits?
+
+This is a multi-step script that first finds all variants within a specified gene and then identifies the traits associated with those variants. To start, `get_snps(mapped_gene = ...)` returns all variants mapped to the gene `HBS1L`. The script then iterates through that list of variants, calling `get_associations(rs_id = ...)` for each one to find any linked traits. Thanks to the package's built-in cache, the repeated per-variant requests are only downloaded once. The collected data is structured into a data.frame mapping each variant to its traits, with one row per variant-to-trait relationship.
+
+```{r q10}
+# --- Configuration ---
+gene_of_interest <- "HBS1L"
+
+cat(sprintf("--- Step 1: Finding variants for gene '%s' ---\n", gene_of_interest))
+
+# --- Find all variants for the gene ---
+snps <- get_snps(mapped_gene = gene_of_interest)
+gene_variants_rsids <- snps@snps$rs_id
+gene_variants_rsids <- gene_variants_rsids[!is.na(gene_variants_rsids)]
+cat(sprintf("\nFound %d total variants for '%s'.\n",
+            length(gene_variants_rsids), gene_of_interest))
+
+# --- Step 2: For each variant, find its associated traits ---
+cat(sprintf("\n--- Step 2: Checking for associated traits for the %d variants ---\n",
+            length(gene_variants_rsids)))
+
+variant_trait_map <- list()
+for (rs_id in gene_variants_rsids) {
+  assocs <- get_associations(rs_id = rs_id)
+  traits_for_snp <- unique(assocs@efo_traits$efo_trait)
+  traits_for_snp <- traits_for_snp[!is.na(traits_for_snp)]
+  variant_trait_map[[rs_id]] <- sort(traits_for_snp)
+}
+
+# --- Step 3: Display the results ---
+cat("\n--- Results ---\n")
+
+results_df <- data.frame(
+  variant_rsID = rep(names(variant_trait_map), lengths(variant_trait_map)),
+  associated_traits = unlist(variant_trait_map, use.names = FALSE),
+  stringsAsFactors = FALSE
+)
+
+if (nrow(results_df) > 0) {
+  print(results_df)
+} else {
+  cat("Could not find any trait associations for the variants checked.\n")
+}
+```
+
+### Question 11: Which variants are associated with an environmental factor on disease outcome? Eg: variants associated with diet on total blood protein measurement (GxE)
+
+This script performs a complex two-step search to find Gene-by-Environment (GxE) interactions, where a factor like **"diet"** influences a trait like **"total blood protein measurement."** First, `get_studies(efo_trait = ..., gxe = TRUE)` gathers all studies flagged as GxE for the trait of interest. In the second step, the code iterates through each of those studies, fetching all their associations with `get_associations(accession_id = ...)` and keeping the ones whose EFO traits explicitly mention the **"diet"** environmental factor. Finally, the filtered results are organized into a data.frame and displayed.
+
+```{r q11}
+# --- Configuration ---
+trait_of_interest <- "total blood protein measurement"
+environmental_factor <- "diet"
+
+cat(sprintf("===== Step 1: Finding GxE studies for '%s' =====\n", trait_of_interest))
+
+# --- Find all GxE studies for the trait ---
+gxe_studies <- get_studies(efo_trait = trait_of_interest, gxe = TRUE)
+gxe_accessions <- gxe_studies@studies$accession_id
+gxe_accessions <- gxe_accessions[!is.na(gxe_accessions)]
+cat(sprintf("\nFound %d GxE studies for '%s'.\n",
+            length(gxe_accessions), trait_of_interest))
+
+# --- Step 2: Find associations with the environmental factor within those studies ---
+cat(sprintf("\n===== Step 2: Searching for '%s' factor within these studies =====\n",
+            environmental_factor))
+gxe_associations <- list()
+for (accession_id in gxe_accessions) {
+  assocs <- get_associations(accession_id = accession_id)
+
+  # Keep associations whose EFO traits mention the environmental factor
+  matched <- assocs@efo_traits[
+    !is.na(assocs@efo_traits$efo_trait) &
+      grepl(environmental_factor, assocs@efo_traits$efo_trait, ignore.case = TRUE),
+  ]
+  if (nrow(matched) == 0) {
+    next
+  }
+  for (association_id in unique(matched$association_id)) {
+    traits <- matched$efo_trait[matched$association_id == association_id]
+    reported <- assocs@reported_traits$reported_trait[
+      assocs@reported_traits$association_id == association_id
+    ]
+    pubmed_id <- gxe_studies@studies$pubmed_id[
+      gxe_studies@studies$accession_id == accession_id
+    ]
+    gxe_associations[[length(gxe_associations) + 1]] <- data.frame(
+      accession_id = accession_id,
+      pubmed_id = if (length(pubmed_id) > 0) pubmed_id[1] else NA_character_,
+      reported_traits = paste(reported, collapse = ", "),
+      efo_traits = paste(traits, collapse = ", "),
+      stringsAsFactors = FALSE
+    )
+  }
+}
+
+# --- Step 3: Display the results ---
+cat("\n===== Step 3: Results =====\n")
+if (length(gxe_associations) > 0) {
+  results_df <- do.call(rbind, gxe_associations)
+  cat(sprintf("Found %d associations matching the GxE criteria.\n", nrow(results_df)))
+  print(results_df[, c("accession_id", "pubmed_id",
+                       "reported_traits", "efo_traits")])
+} else {
+  cat("Could not find any GxE associations matching the specified criteria.\n")
+}
+```
+
+### Question 12: Which genomic region has the most variants associated with a disease? eg: the genomic region with most variants for type 2 diabetes
+
+This script determines which genomic regions are most associated with a disease through a multi-step process. First, it gathers the associations for "type 2 diabetes mellitus" sorted by p-value and collects the unique variants (rsIDs) of the top ones. Next, it iterates through these variants, calling `get_snps(rs_id = ...)` for each to find its genomic location — the region name is directly available in the `locations` table under the `region.name` column. Finally, it counts how many times each region appeared and displays a ranked list of the most common regions.
+
+```{r q12}
+# --- Configuration ---
+trait_of_interest <- "type 2 diabetes mellitus"
+associations_to_check <- 100
+top_regions_to_display <- 10
+
+cat(sprintf(
+  "--- Step 1: Finding the top %d most significant associations for '%s' ---\n",
+  associations_to_check, trait_of_interest
+))
+
+# --- Step 1: Fetch the associations and collect the unique variants of the top ones ---
+assocs <- get_associations(efo_trait = trait_of_interest)
+assocs_df <- merge(assocs@associations, assocs@snp_effect_alleles, by = "association_id")
+assocs_df$p_value <- as.numeric(assocs_df$p_value)
+assocs_df <- assocs_df[order(assocs_df$p_value), ]
+top <- head(assocs_df, associations_to_check)
+
+rs_ids <- sub("-.*$", "", top$snp_effect_allele)
+unique_rsids <- unique(rs_ids[startsWith(rs_ids, "rs")])
+unique_rsids <- unique_rsids[!is.na(unique_rsids)]
+cat(sprintf(
+  "--- Finished fetching. Found %d unique variants from the top associations. ---\n\n",
+  length(unique_rsids)
+))
+
+# --- Step 2: For each unique variant, find its genomic region ---
+region_list <- character(0)
+if (length(unique_rsids) > 0) {
+  cat(sprintf("\n--- Step 2: Looking up genomic regions for %d variants ---\n",
+              length(unique_rsids)))
+
+  for (i in seq_along(sort(unique_rsids))) {
+    rs_id <- sort(unique_rsids)[i]
+    snp <- get_snps(rs_id = rs_id)
+    region_list <- c(region_list, snp@locations$`region.name`)
+    region_list <- region_list[!is.na(region_list)]
+
+    # Print progress update
+    if (i %% 25 == 0) {
+      cat(sprintf("Processed %d/%d variants...\n", i, length(unique_rsids)))
+    }
+  }
+}
+
+# --- Step 3: Count and display the most common regions ---
+cat("\n--- Analysis Complete ---\n")
+if (length(region_list) > 0) {
+  region_counts <- sort(table(region_list), decreasing = TRUE)
+
+  cat(sprintf(
+    "The top %d genomic regions with the most variants for '%s' are:\n",
+    top_regions_to_display, trait_of_interest
+  ))
+  print(head(region_counts, top_regions_to_display))
+} else {
+  cat("Could not retrieve region information for the variants.\n")
+}
+```
+
+### Question 13. Which SNP has the strongest effect size/OR for a disease? eg: The SNP with the strongest effect size/OR for type 2 diabetes
+
+This script identifies the single SNP with the strongest effect size, measured by **Odds Ratio** (OR), for "type 2 diabetes mellitus". All associations for the trait are fetched with `get_associations(efo_trait = ...)`, sorted locally by `or_value` in descending order, and the top result is placed into a data.frame for a clean presentation showing the SNP with the highest OR, its **p-value**, and its **rsID**.
+
+```{r q13}
+# --- Configuration ---
+trait_of_interest <- "type 2 diabetes mellitus"
+
+cat(sprintf(
+  "Searching for the SNP with the strongest Odds Ratio for '%s'...\n",
+  trait_of_interest
+))
+
+# --- Step 1: Fetch the associations and find the highest or_value ---
+assocs <- get_associations(efo_trait = trait_of_interest)
+assocs_df <- assocs@associations
+assocs_df$or_value <- as.numeric(assocs_df$or_value)
+assocs_df <- assocs_df[!is.na(assocs_df$or_value), ]
+
+top_association <- head(assocs_df[order(assocs_df$or_value, decreasing = TRUE), ], 1)
+top_association <- merge(top_association, assocs@snp_effect_alleles, by = "association_id")
+
+# --- Step 2: Display the result ---
+if (nrow(top_association) > 0) {
+  cat("\nFound the following association with the strongest effect size (Odds Ratio):\n")
+
+  # Parse the risk allele field
+  allele_parts <- strsplit(top_association$snp_effect_allele, "-", fixed = TRUE)
+  top_association$variant_rsID <- vapply(allele_parts, function(p) p[1], character(1))
+  top_association$risk_allele_base <- vapply(
+    allele_parts,
+    function(p) if (length(p) > 1) paste(p[-1], collapse = "-") else NA_character_,
+    character(1)
+  )
+
+  print(top_association[1, c("or_value", "p_value",
+                             "variant_rsID", "risk_frequency")])
+} else {
+  cat(sprintf("\nCould not find an association with an Odds Ratio for '%s'.\n",
+              trait_of_interest))
+}
+```
+
+### Question 14. How many studies report a specific gene associated with a specific disease? eg: number of the studies reporting the KCNQ1 gene associated with type 2 diabetes
+
+This script finds how many studies associate the **KCNQ1** gene with "type 2 diabetes". Instead of fetching all associations and filtering locally, it passes both filters directly to `get_studies(efo_trait = ..., mapped_gene = ...)`, and the server returns only the matching studies. The total number of unique studies is reported, and their accession IDs are printed.
+
+```{r q14}
+# --- Configuration ---
+trait_of_interest <- "type 2 diabetes mellitus"
+gene_of_interest <- "KCNQ1"
+
+cat(sprintf(
+  "Searching for the number of studies reporting '%s' associated with '%s'...\n",
+  gene_of_interest, trait_of_interest
+))
+
+# Combine the trait and gene filters in a single query
+studies <- get_studies(efo_trait = trait_of_interest, mapped_gene = gene_of_interest)
+
+# --- Display the result ---
+cat("\n--- Search Complete ---\n")
+if (length(studies) > 0) {
+  cat(sprintf(
+    "A total of %d unique studies report the '%s' gene in an association with '%s'.\n",
+    length(studies), gene_of_interest, trait_of_interest
+  ))
+
+  cat("\nStudy Accession IDs:\n")
+  for (accession_id in sort(studies@studies$accession_id)) {
+    cat(sprintf("- %s\n", accession_id))
+  }
+} else {
+  cat(sprintf(
+    "Could not find any studies reporting '%s' for '%s'.\n",
+    gene_of_interest, trait_of_interest
+  ))
+}
+```
+
+### Question 15. What are the sample sizes used for the top 10 significant variants for disease, eg: find the top 10 significant variants associated with type 2 diabetes and find their sample size
+
+This script answers the question in a two-step process. First, it fetches all associations for "type 2 diabetes mellitus" and keeps the top 10 most significant ones sorted by **p-value**. Then, for each result, it calls `get_studies(pubmed_id = ...)` using the association's publication ID to fetch the corresponding study details, including its initial sample size. Finally, a combined table is displayed, linking each top variant to the sample size of the study it was found in.
+
+```{r q15}
+# --- Configuration ---
+trait_of_interest <- "type 2 diabetes mellitus"
+results_to_find <- 10
+
+cat(sprintf(
+  "--- Step 1: Finding the top %d most significant associations for '%s' ---\n",
+  results_to_find, trait_of_interest
+))
+
+# --- Step 1: Get the top 10 most significant associations for the trait ---
+assocs <- get_associations(efo_trait = trait_of_interest)
+assocs_df <- assocs@associations
+assocs_df$p_value <- as.numeric(assocs_df$p_value)
+top <- head(assocs_df[order(assocs_df$p_value), ], results_to_find)
+cat(sprintf("Found %d associations. Now fetching their study sample sizes...\n", nrow(top)))
+
+# --- Step 2: For each association, find its study's sample size ---
+final_results <- list()
+for (i in seq_len(nrow(top))) {
+  assoc <- top[i, ]
+  if (is.na(assoc$pubmed_id)) {
+    sample_size <- "N/A"
+  } else {
+    studies <- get_studies(pubmed_id = assoc$pubmed_id)
+    sample_size <- if (nrow(studies@studies) > 0) {
+      studies@studies$initial_sample_size[1]
+    } else {
+      "N/A"
+    }
+  }
+
+  final_results[[i]] <- data.frame(
+    association_id = assoc$association_id,
+    p_value = assoc$p_value,
+    initial_sample_size = sample_size,
+    stringsAsFactors = FALSE
+  )
+}
+results_df <- do.call(rbind, final_results)
+results_df <- merge(results_df, assocs@snp_effect_alleles, by = "association_id")
+allele_parts <- strsplit(results_df$snp_effect_allele, "-", fixed = TRUE)
+results_df$variant_rsID <- vapply(allele_parts, function(p) p[1], character(1))
+results_df$risk_allele_base <- vapply(
+  allele_parts,
+  function(p) if (length(p) > 1) paste(p[-1], collapse = "-") else NA_character_,
+  character(1)
+)
+
+# --- Step 3: Display the results ---
+cat("\n--- Search Complete ---\n")
+if (nrow(results_df) > 0) {
+  results_df <- results_df[!duplicated(results_df$association_id), ]
+  print(results_df[, c("p_value", "variant_rsID", "initial_sample_size")])
+} else {
+  cat(sprintf("Could not retrieve top associations for '%s'.\n", trait_of_interest))
+}
+```

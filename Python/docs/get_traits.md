@@ -1,0 +1,2 @@
+::: pandasgwas.get_traits
+
