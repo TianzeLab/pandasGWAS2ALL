@@ -1,0 +1,10 @@
+pandasgwas/__pycache__/
+tests/.pytest_cache/
+tests/__pycache__/
+.idea/
+pandasgwas.egg-info/
+dist/
+build/
+site/
+/.vscode
+/R
