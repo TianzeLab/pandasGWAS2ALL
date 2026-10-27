@@ -1,0 +1,10 @@
+pkgdown:
+  as_is: false
+
+development:
+  mode: auto
+
+run_examples: false
+
+code:
+  eval: false

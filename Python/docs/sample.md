@@ -1,4 +1,4 @@
-# GWAS REST API
+# Sample Questions
 
 This sample notebook shows how to answer typical GWAS questions with **pandasGWAS2**. All REST API access — URL construction, pagination, response cleaning and caching — is handled by the package: `get_associations`, `get_studies` and `get_snps` return objects that expose the data as hierarchical pandas DataFrames joined by `association_id` (for associations) or `accession_id` (for studies).
 
