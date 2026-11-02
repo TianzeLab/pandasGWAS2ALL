@@ -14,3 +14,5 @@ pandasGWAS: a Python package for easy retrieval of GWAS Catalog data
 [is_API_available][pandasgwas.utility.is_API_available], [reinit_cache][pandasgwas.client.reinit_cache], [clear_cache][pandasgwas.client.clear_cache]
 ## Submodules
 [summary_statistics][pandasgwas.summary_statistics]: A set of functions for easy retrieval of summary statistics data based on FTP data.
+## Sample Questions
+[Sample Questions](sample.md): A step-by-step guide to answering typical GWAS questions (variants mapped to a gene, traits associated with a variant, top variants by p-value, ancestry information, etc.) with pandasGWAS.

@@ -47,7 +47,6 @@ Nine high-level functions cover every GWAS Catalog entity. Each accepts filter p
 | `get_loci()` | Locus | `association_id` (required), `locus_id` (optional sub-id) |
 | `get_genomic_contexts()` | GenomicContext | `rs_id` (required), `genomicContext_id` (optional sub-id) |
 
-`get_associations()` is unique in supporting both an `association_id` path lookup and query filters in the same call — when both are supplied the intersection is returned.
 
 ## Data objects (S4 classes)
 
