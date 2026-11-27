@@ -187,7 +187,7 @@ is_API_available()  # True if the GWAS Catalog API responds with HTTP 200
 
 ## Documentation
 
-See [pandasGWAS Documentation](tianzelab.github.io/pandasGWAS2/)
+See [pandasGWAS Documentation](https://tianzelab.github.io/pandasGWAS2/)
 
 ## Licensing information
 
