@@ -109,8 +109,8 @@ assocs_df['p_value'] = pd.to_numeric(assocs_df['p_value'], errors='coerce')
 
 # Join the trait names and keep the top 10 associations
 top_df = (
-    assocs_df.sort_values('p_value')
-    .merge(assocs.efo_traits, on='association_id')
+    assocs_df.merge(assocs.efo_traits, on='association_id')
+    .sort_values('p_value')
     .drop_duplicates(subset='association_id')
     .head(10)
 )

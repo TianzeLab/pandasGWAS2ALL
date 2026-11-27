@@ -27,9 +27,9 @@
 #' @export
 #'
 get_traits <- function(
+    efo_id = NULL,
     efo_trait = NULL,
     uri = NULL,
-    efo_id = NULL,
     pubmed_id = NULL,
     mapped_gene = NULL,
     extended_geneset = NULL,

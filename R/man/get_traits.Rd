@@ -5,9 +5,9 @@
 \title{Get Trait data from the server}
 \usage{
 get_traits(
+  efo_id = NULL,
   efo_trait = NULL,
   uri = NULL,
-  efo_id = NULL,
   pubmed_id = NULL,
   mapped_gene = NULL,
   extended_geneset = NULL,
@@ -16,11 +16,11 @@ get_traits(
 )
 }
 \arguments{
+\item{efo_id}{The trait URI shortform}
+
 \item{efo_trait}{The trait name or label}
 
 \item{uri}{The trait URI or unique identifier}
-
-\item{efo_id}{The trait URI shortform}
 
 \item{pubmed_id}{pubmedId of the publication}
 

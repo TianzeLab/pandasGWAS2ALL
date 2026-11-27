@@ -61,7 +61,7 @@ class Association:
             raw_data: list. Converted from obtained JSON data.
             associations: DataFrame. It only exists if the parameter mode of constructor is Fat.
             efo_traits: DataFrame. It only exists if the parameter mode of constructor is Fat.
-            snp_allele: DataFrame. It only exists if the parameter mode of constructor is Fat.
+            snp_alleles: DataFrame. It only exists if the parameter mode of constructor is Fat.
             bg_efo_traits: DataFrame. It only exists if the parameter mode of constructor is Fat.
             reported_traits: DataFrame. It only exists if the parameter mode of constructor is Fat.
             locations: DataFrame. It only exists if the parameter mode of constructor is Fat.
@@ -78,7 +78,7 @@ class Association:
        ch.mode
        ch.associations
        ch.efo_traits
-       ch.snp_allele
+       ch.snp_alleles
        ch.bg_efo_traits
        ch.reported_traits
        ch.locations
@@ -173,7 +173,7 @@ class Association:
         if len(standardized_data) == 0:
             self.associations = DataFrame(columns=_ASSOCIATION_COLUMNS)
             self.efo_traits = DataFrame(columns=_EFO_TRAITS_COLUMNS)
-            self.snp_allele = DataFrame(columns=_SNP_ALLELE_COLUMNS)
+            self.snp_alleles = DataFrame(columns=_SNP_ALLELE_COLUMNS)
             self.bg_efo_traits = DataFrame(columns=_BG_EFO_TRAITS_COLUMNS)
             self.reported_traits = DataFrame(columns=_REPORTED_TRAITS_COLUMNS)
             self.locations = DataFrame(columns=_LOCATIONS_COLUMNS)
@@ -335,7 +335,7 @@ class Association:
                     "Association is running in fat mode. It has 8 DataFrames with hierarchical dependencies.\n"
                     "associations: %d rows\n"
                     "|\n -efo_traits: %d rows\n"
-                    "|\n -snp_allele: %d rows\n"
+                    "|\n -snp_alleles: %d rows\n"
                     "|\n -bg_efo_traits: %d rows\n"
                     "|\n -reported_traits: %d rows\n"
                     "|\n -locations: %d rows\n"
@@ -344,7 +344,7 @@ class Association:
                     % (
                         len(self.associations),
                         len(self.efo_traits),
-                        len(self.snp_allele),
+                        len(self.snp_alleles),
                         len(self.bg_efo_traits),
                         len(self.reported_traits),
                         len(self.locations),

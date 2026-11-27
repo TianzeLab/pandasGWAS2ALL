@@ -128,8 +128,8 @@ assocs_df <- assocs@associations
 assocs_df$p_value <- as.numeric(assocs_df$p_value)
 
 # Join the trait names and keep the top 10 associations
-assocs_df <- assocs_df[order(assocs_df$p_value), ]
 top_df <- merge(assocs_df, assocs@efo_traits, by = "association_id")
+top_df <- top_df[order(top_df$p_value), ]
 top_df <- top_df[!duplicated(top_df$association_id), ]
 top_df <- head(top_df, 10)
 

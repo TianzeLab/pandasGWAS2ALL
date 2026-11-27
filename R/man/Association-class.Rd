@@ -20,7 +20,7 @@ mode it only stores the raw list data.
 
 \item{\code{efo_traits}}{data.frame}
 
-\item{\code{snp_allele}}{data.frame}
+\item{\code{snp_alleles}}{data.frame}
 
 \item{\code{bg_efo_traits}}{data.frame}
 

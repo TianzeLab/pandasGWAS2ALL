@@ -8,7 +8,7 @@
 #' @slot mode character. Fat or Thin
 #' @slot associations data.frame
 #' @slot efo_traits data.frame
-#' @slot snp_allele data.frame
+#' @slot snp_alleles data.frame
 #' @slot bg_efo_traits data.frame
 #' @slot reported_traits data.frame
 #' @slot locations data.frame
@@ -26,7 +26,7 @@ setClass(
     mode = "character",
     associations = "data.frame",
     efo_traits = "data.frame",
-    snp_allele = "data.frame",
+    snp_alleles = "data.frame",
     bg_efo_traits = "data.frame",
     reported_traits = "data.frame",
     locations = "data.frame",
@@ -133,8 +133,8 @@ Association <- function(data = NULL, mode = "Fat") {
   obj@efo_traits <- data.frame(matrix(ncol = length(EFO_TRAITS_COLUMNS), nrow = 0))
   colnames(obj@efo_traits) <- EFO_TRAITS_COLUMNS
 
-  obj@snp_allele <- data.frame(matrix(ncol = length(SNP_ALLELE_COLUMNS), nrow = 0))
-  colnames(obj@snp_allele) <- SNP_ALLELE_COLUMNS
+  obj@snp_alleles <- data.frame(matrix(ncol = length(SNP_ALLELE_COLUMNS), nrow = 0))
+  colnames(obj@snp_alleles) <- SNP_ALLELE_COLUMNS
 
   obj@bg_efo_traits <- data.frame(matrix(ncol = length(BG_EFO_TRAITS_COLUMNS), nrow = 0))
   colnames(obj@bg_efo_traits) <- BG_EFO_TRAITS_COLUMNS
@@ -203,7 +203,7 @@ Association <- function(data = NULL, mode = "Fat") {
 
   association_rows <- list()
   efo_traits_rows <- list()
-  snp_allele_rows <- list()
+  snp_alleles_rows <- list()
   bg_efo_traits_rows <- list()
   reported_traits_rows <- list()
   locations_rows <- list()
@@ -244,24 +244,24 @@ Association <- function(data = NULL, mode = "Fat") {
       }
     }
 
-    # snp_allele
-    raw_snp_allele <- record$snp_allele
-    if (is.null(raw_snp_allele)) {
-      iterable_snp_allele <- list()
-    } else if (is.list(raw_snp_allele) && is.null(names(raw_snp_allele))) {
-      iterable_snp_allele <- raw_snp_allele
+    # snp_alleles
+    raw_snp_alleles <- record$snp_allele
+    if (is.null(raw_snp_alleles)) {
+      iterable_snp_alleles <- list()
+    } else if (is.list(raw_snp_alleles) && is.null(names(raw_snp_alleles))) {
+      iterable_snp_alleles <- raw_snp_alleles
     } else {
-      iterable_snp_allele <- list(raw_snp_allele)
+      iterable_snp_alleles <- list(raw_snp_alleles)
     }
-    for (item in iterable_snp_allele) {
+    for (item in iterable_snp_alleles) {
       if (is.list(item) && !is.null(names(item))) {
-        snp_allele_rows <- c(snp_allele_rows, list(list(
+        snp_alleles_rows <- c(snp_alleles_rows, list(list(
           association_id = association_id,
           rs_id = item$rs_id,
           effect_allele = item$effect_allele
         )))
       } else {
-        snp_allele_rows <- c(snp_allele_rows, list(list(
+        snp_alleles_rows <- c(snp_alleles_rows, list(list(
           association_id = association_id,
           rs_id = item,
           effect_allele = NA
@@ -415,13 +415,13 @@ Association <- function(data = NULL, mode = "Fat") {
     obj@efo_traits <- built
   }
 
-  # Build snp_allele data.frame
-  if (length(snp_allele_rows) > 0) {
-    built <- data.frame(row.names = seq_along(snp_allele_rows))
+  # Build snp_alleles data.frame
+  if (length(snp_alleles_rows) > 0) {
+    built <- data.frame(row.names = seq_along(snp_alleles_rows))
     for (col in SNP_ALLELE_COLUMNS) {
-      col_values <- vector("list", length(snp_allele_rows))
-      for (r_idx in seq_along(snp_allele_rows)) {
-        cell <- snp_allele_rows[[r_idx]][[col]]
+      col_values <- vector("list", length(snp_alleles_rows))
+      for (r_idx in seq_along(snp_alleles_rows)) {
+        cell <- snp_alleles_rows[[r_idx]][[col]]
         if (is.null(cell)) {
           cell <- NA
         }
@@ -440,7 +440,7 @@ Association <- function(data = NULL, mode = "Fat") {
         built[[col]] <- col_values
       }
     }
-    obj@snp_allele <- built
+    obj@snp_alleles <- built
   }
 
   # Build bg_efo_traits data.frame
@@ -607,7 +607,7 @@ setMethod(
         "Association is running in fat mode. It has 8 DataFrames with hierarchical dependencies.\n",
         "associations: ", nrow(object@associations), " rows\n",
         "|\n -efo_traits: ", nrow(object@efo_traits), " rows\n",
-        "|\n -snp_allele: ", nrow(object@snp_allele), " rows\n",
+        "|\n -snp_alleles: ", nrow(object@snp_alleles), " rows\n",
         "|\n -bg_efo_traits: ", nrow(object@bg_efo_traits), " rows\n",
         "|\n -reported_traits: ", nrow(object@reported_traits), " rows\n",
         "|\n -locations: ", nrow(object@locations), " rows\n",
@@ -660,7 +660,7 @@ setMethod(
       "mode",
       "associations",
       "efo_traits",
-      "snp_allele",
+      "snp_alleles",
       "bg_efo_traits",
       "reported_traits",
       "locations",
@@ -974,7 +974,7 @@ setMethod(
       cat("\nDataFrames:\n")
       cat("  associations:", nrow(object@associations), "rows\n")
       cat("  efo_traits:", nrow(object@efo_traits), "rows\n")
-      cat("  snp_allele:", nrow(object@snp_allele), "rows\n")
+      cat("  snp_alleles:", nrow(object@snp_alleles), "rows\n")
       cat("  bg_efo_traits:", nrow(object@bg_efo_traits), "rows\n")
       cat("  reported_traits:", nrow(object@reported_traits), "rows\n")
       cat("  locations:", nrow(object@locations), "rows\n")

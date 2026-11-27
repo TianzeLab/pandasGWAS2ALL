@@ -11,7 +11,7 @@ test_that("NULL data yields an empty Fat object", {
   expect_equal(length(assoc), 0)
   expect_equal(nrow(assoc@associations), 0)
   expect_equal(nrow(assoc@efo_traits), 0)
-  expect_equal(nrow(assoc@snp_allele), 0)
+  expect_equal(nrow(assoc@snp_alleles), 0)
   expect_equal(nrow(assoc@bg_efo_traits), 0)
   expect_equal(nrow(assoc@reported_traits), 0)
   expect_equal(nrow(assoc@locations), 0)
@@ -107,17 +107,17 @@ test_that("multiple efo_traits and bg_efo_traits expand to rows", {
   expect_true(all(assoc@efo_traits$association_id == "12345"))
 })
 
-test_that("single-object snp_allele (named list) yields one row", {
+test_that("single-object snp_alleles (named list) yields one row", {
   data <- list(list(
     association_id = "12345",
-    snp_allele = list(rs_id = "rs123", effect_allele = "A")
+    snp_alleles = list(rs_id = "rs123", effect_allele = "A")
   ))
   assoc <- Association(data, "Fat")
-  expect_equal(nrow(assoc@snp_allele), 1)
-  expect_equal(assoc@snp_allele$rs_id, "rs123")
-  expect_equal(assoc@snp_allele$effect_allele, "A")
+  expect_equal(nrow(assoc@snp_alleles), 1)
+  expect_equal(assoc@snp_alleles$rs_id, "rs123")
+  expect_equal(assoc@snp_alleles$effect_allele, "A")
   expect_equal(
-    colnames(assoc@snp_allele),
+    colnames(assoc@snp_alleles),
     c("association_id", "rs_id", "effect_allele")
   )
 })
@@ -171,7 +171,7 @@ test_that("snp_effect_allele expands into the plural-named table", {
 test_that("NULL nested fields yield zero child rows", {
   assoc <- Association(list(list(association_id = "12345")), "Fat")
   expect_equal(nrow(assoc@efo_traits), 0)
-  expect_equal(nrow(assoc@snp_allele), 0)
+  expect_equal(nrow(assoc@snp_alleles), 0)
   expect_equal(nrow(assoc@reported_traits), 0)
   expect_equal(nrow(assoc@locations), 0)
   expect_equal(nrow(assoc@mapped_genes), 0)
@@ -294,7 +294,7 @@ test_that("names returns the slot names and length counts raw records", {
     list(association_id = "12345"), list(association_id = "67890")
   ), "Fat")
   expect_equal(names(assoc), c(
-    "raw_data", "mode", "associations", "efo_traits", "snp_allele",
+    "raw_data", "mode", "associations", "efo_traits", "snp_alleles",
     "bg_efo_traits", "reported_traits", "locations", "mapped_genes",
     "snp_effect_alleles"
   ))

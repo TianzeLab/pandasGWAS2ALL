@@ -8,9 +8,9 @@ BASE_URL = "https://www.ebi.ac.uk/gwas/rest/api/v2/efo-traits"
 
 
 def get_traits(
+    efo_id: str = None,
     efo_trait: str = None,
     uri: str = None,
-    efo_id: str = None,
     pubmed_id: str = None,
     mapped_gene: str = None,
     extended_geneset: bool = None,
